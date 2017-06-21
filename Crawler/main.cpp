@@ -9,6 +9,7 @@
 #pragma comment(lib,"WS2_32.lib")
 using namespace std;
 
+#define DEFAULT_PAGE_BUF_SIZE 1048576 
 queue<string> hrefUrl;
 set<string> visitedUrl;
 set<string> visitedImg;
@@ -72,11 +73,54 @@ bool GetHttpResponse(const string & url, char * &response, int &bytesRead)
 	memcpy(&addr.sin_addr, hp->h_addr, 4);
 
 	//创建连接
-	if (0 == connect(sock, (SOCKADDR*)&addr, sizeof(addr)))
+	if (0 != connect(sock, (SOCKADDR*)&addr, sizeof(addr)))
 	{
 		cout << "can not connect:" << url << endl;
+		closesocket(sock);
 		return false;
 	}
+
+	//准备发送数据
+	string request = "GET " + resource + " HTTP/1.1\r\nHost:" + host + "\r\nConnection:Close\r\n\r\n";
+
+	//发送数据
+	if (SOCKET_ERROR == send(sock, request.c_str(), request.size(), 0))
+	{
+		cout << "send error" << endl;
+		closesocket(sock);
+		return false;
+	}
+
+	//接收数据
+	int m_nContentLength = DEFAULT_PAGE_BUF_SIZE;
+	char *pageBuf = (char *)malloc(m_nContentLength);
+	memset(pageBuf, 0, m_nContentLength);
+
+	bytesRead = 0;
+	int ret = 1;
+	cout << "Read: ";
+	while (ret > 0) {
+		ret = recv(sock, pageBuf + bytesRead, m_nContentLength - bytesRead, 0);
+
+		if (ret > 0)
+		{
+			bytesRead += ret;
+		}
+
+		if (m_nContentLength - bytesRead<100) {
+			cout << "\nRealloc memorry" << endl;
+			m_nContentLength *= 2;
+			pageBuf = (char*)realloc(pageBuf, m_nContentLength);       //重新分配内存  
+		}
+		cout << ret << " ";
+	}
+	cout << endl;
+
+	pageBuf[bytesRead] = '\0';
+	response = pageBuf;
+	closesocket(sock);
+	return true;
+
 
 }
 
